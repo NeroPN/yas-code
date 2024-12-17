@@ -1,3 +1,4 @@
+
 (function() {
     // =======================
     // Configuration Variables
@@ -328,27 +329,34 @@
         var utmGclid = utmData['utm_gclid'] || '';
         var utmFbclid = utmData['utm_fbclid'] || '';
 
-        // Get current time
+        // Get current time as a number (milliseconds since epoch)
         var currentTime = Date.now();
 
         // Get the hubspotutk cookie value
-        var hubspotutk = getCookie('hubspotutk') || "";
+        var hubspotutk = getCookie('hubspotutk');
 
         var data = {
-            "submittedAt": currentTime.toString(),
+            "submittedAt": currentTime.toString(), // Ensure this is a string as per sample JSON
             "fields": [
                 {
-                    "objectTypeId": "0-1",
                     "name": "email",
                     "value": email
                 }
             ],
             "context": {
-                "hutk": hubspotutk,
                 "pageUri": window.location.href
             }
         };
 
+        // Conditionally add 'hutk' if 'hubspotutk' exists and is not empty
+        if (hubspotutk && hubspotutk.trim() !== "") {
+            data.context.hutk = hubspotutk;
+            log("Included 'hutk' in payload:", hubspotutk);
+        } else {
+            console.warn("hubspotutk cookie not found or empty. 'hutk' will be omitted from the payload.");
+        }
+
+        // Add UTM fields
         addUTMField(data.fields, "utm_medium", utmMedium);
         addUTMField(data.fields, "utm_source", utmSource);
         addUTMField(data.fields, "utm_campaign", utmCampaign);
@@ -371,7 +379,9 @@
             if (response.ok) {
                 return response.json();
             } else {
-                throw new Error('API call failed with status ' + response.status);
+                return response.json().then(function(errorData) {
+                    throw new Error('API call failed with status ' + response.status + ': ' + JSON.stringify(errorData));
+                });
             }
         })
         .then(function(responseData) {
@@ -391,8 +401,7 @@
     function addUTMField(fields, fieldName, fieldValue) {
         if (fieldValue) {
             fields.push({
-                "objectTypeId": "0-1",
-                "name": fieldName,
+                "name": fieldName, // Removed "objectTypeId" as per HubSpot's API requirements
                 "value": fieldValue
             });
             log("Added UTM field:", fieldName, "=", fieldValue);
@@ -412,7 +421,9 @@
         handleCalendarSubmission();
     }
 
-    // Execute the main function on script load
-    main();
+    // Execute the main function after the DOM is fully loaded
+    document.addEventListener('DOMContentLoaded', function() {
+        main();
+    });
 
 })();
