@@ -1,94 +1,159 @@
+/**
+ * UTM Parameters Handler
+ * 
+ * Hierarchy Logic:
+ * 1. **UTM Present:** If any UTM parameters are found in the URL, delete all existing UTM cookies and set new ones based on the UTM parameters.
+ * 2. **Referrer Present:** If no UTM parameters are in the URL but a referrer exists (and is not in the ignore list), set/overwrite UTM cookies based on the referrer's domain only if 'utm_medium' is "direct", "none", or not set.
+ * 3. **Direct Traffic:** If neither UTM parameters nor a referrer are present, set 'utm_source' to "direct" and 'utm_medium' to "none" only if no UTM cookies are already set.
+ */
 
-function setUTMCookie(utmParams) {
-    // Create a cookie string from the UTM parameters object
-    var cookieString = "utm=" + encodeURIComponent(JSON.stringify(utmParams)) + "; domain=.example.com; path=/";
-    // Set the cookie in the browser
-    document.cookie = cookieString;
+// ==========================
+// Configuration Section
+// ==========================
+
+// List of referrer substrings to ignore (e.g., "proofserve" will ignore "proofserve.com", "proofserve.io", "app.proofserve.com", etc.)
+var referrersToIgnore = ["yourowndomain"];
+
+// List of known organic referrer hostnames
+var organicHostnames = ["google", "bing", "facebook", "linkedin", "twitter", "instagram"];
+
+// ==========================
+// Utility Functions
+// ==========================
+
+/**
+ * Sets a cookie with the given name, value, and expiration days.
+ * @param {string} name - Cookie name.
+ * @param {string} value - Cookie value.
+ * @param {number} days - Expiration in days.
+ */
+function setCookie(name, value, days) {
+    var expires = "";
+    if (days) {
+        var date = new Date();
+        date.setTime(date.getTime() + (days * 24 * 60 * 60 * 1000));
+        expires = "; expires=" + date.toUTCString();
+    }
+    document.cookie = name + "=" + encodeURIComponent(value) + expires + "; domain=.example.com; path=/; Secure; SameSite=Lax";
 }
 
-function getUTMCookie() {
-    var name = "utm=";
-    // Decode the document's cookie string
-    var decodedCookie = decodeURIComponent(document.cookie);
-    // Split the cookies into an array
-    var ca = decodedCookie.split(';');
+/**
+ * Retrieves the value of a cookie by its name.
+ * @param {string} name - Cookie name.
+ * @returns {string|null} - Cookie value or null if not found.
+ */
+function getCookie(name) {
+    var nameEQ = name + "=";
+    var ca = decodeURIComponent(document.cookie).split(';');
     for (var i = 0; i < ca.length; i++) {
-        var c = ca[i];
-        // Remove leading whitespace characters
-        while (c.charAt(0) == ' ') {
-            c = c.substring(1);
-        }
-        // Check if this cookie starts with the UTM cookie name
-        if (c.indexOf(name) == 0) {
-            // Parse and return the UTM parameters object
-            return JSON.parse(c.substring(name.length, c.length));
-        }
+        var c = ca[i].trim();
+        if (c.indexOf(nameEQ) === 0) return c.substring(nameEQ.length, c.length);
     }
     return null;
 }
 
-function parseUTMParams() {
-    // Get the current URL object
+/**
+ * Deletes a cookie by setting its expiration date to a past date.
+ * @param {string} name - Cookie name.
+ */
+function deleteCookie(name) {
+    document.cookie = name + "=; expires=Thu, 01 Jan 1970 00:00:00 UTC; domain=.example.com; path=/; Secure; SameSite=Lax";
+}
+
+// ==========================
+// Main Function to Parse and Store UTM Parameters
+// ==========================
+
+/**
+ * Parses UTM parameters from the URL or referrer and stores each parameter in its own cookie.
+ * Follows a specific hierarchy to determine how cookies are set or overwritten.
+ */
+function parseAndStoreUTMParameters() {
     var currentURL = new URL(window.location.href);
-    // Get the search parameters from the URL
     var params = currentURL.searchParams;
+    var utmKeys = ["utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content", "utm_gclid", "utm_fbclid"];
+    var hasUTM = false;
 
-    // Check if any UTM parameters or click IDs are present in the URL
-    var isUTMInURL = params.get("utm_source") || params.get("utm_medium") || 
-                     params.get("utm_campaign") || params.get("utm_term") || 
-                     params.get("utm_content") || params.get("gclid") || 
-                     params.get("fbclid");
+    // Check if any UTM parameters are present in URL
+    for (var i = 0; i < utmKeys.length; i++) {
+        var key = utmKeys[i];
+        var urlParam = (key === "utm_gclid") ? "gclid" : (key === "utm_fbclid" ? "fbclid" : key);
+        if (params.get(urlParam)) {
+            hasUTM = true;
+            break;
+        }
+    }
 
-    if (isUTMInURL) {
-        // Create an object with the UTM parameters from the URL
-        var utmParams = {
-            utm_source: params.get("utm_source") ? params.get("utm_source").toLowerCase() : "",
-            utm_medium: params.get("utm_medium") ? params.get("utm_medium").toLowerCase() : "",
-            utm_campaign: params.get("utm_campaign") ? params.get("utm_campaign").toLowerCase() : "",
-            utm_term: params.get("utm_term") ? params.get("utm_term").toLowerCase() : "",
-            utm_content: params.get("utm_content") ? params.get("utm_content").toLowerCase() : "",
-            utm_gclid: params.get("gclid") ? params.get("gclid").toLowerCase() : "",
-            utm_fbclid: params.get("fbclid") ? params.get("fbclid").toLowerCase() : "",
-        };
-        // Set the UTM cookie with the parameters from the URL
-        setUTMCookie(utmParams);
-    } else if (document.referrer) {
-        // Get the referrer URL object
-        var referrer = new URL(document.referrer).hostname;
-        // Ignore if the referrer is the current site
-        if (referrer.toLowerCase().includes("example")) {
-            return;
+    if (hasUTM) {
+        // Rule 1: UTM Present - Delete all existing UTM cookies
+        for (i = 0; i < utmKeys.length; i++) {
+            deleteCookie(utmKeys[i]);
         }
 
-        // Split the referrer hostname into parts
-        var hostnameParts = referrer.split(".");
-        var referrerDomain;
-        // Extract the middle part of the referrer hostname
-        if (hostnameParts.length === 2) {
-            referrerDomain = hostnameParts[0];
-        } else if (hostnameParts.length === 3) {
-            referrerDomain = hostnameParts[1];
-        } else {
-            referrerDomain = "not-set";
-        }
-
-        if (referrerDomain !== "not-set") {
-            // Create an object with the referrer UTM parameters
-            var referrerUTMParams = {
-                utm_source: referrerDomain.toLowerCase(),
-                utm_medium: "referral",
-            };
-            // Get the existing UTM cookie if it exists
-            var existingUTM = getUTMCookie();
-            // Update the UTM cookie if necessary
-            if (existingUTM && existingUTM.utm_medium === "referral") {
-                setUTMCookie(referrerUTMParams);
-            } else if (!existingUTM) {
-                setUTMCookie(referrerUTMParams);
+        // Set new UTM cookies based on URL parameters
+        for (i = 0; i < utmKeys.length; i++) {
+            key = utmKeys[i];
+            urlParam = (key === "utm_gclid") ? "gclid" : (key === "utm_fbclid" ? "fbclid" : key);
+            var value = params.get(urlParam);
+            if (value) {
+                setCookie(key, value.toLowerCase(), 30);
             }
         }
+    } else if (document.referrer) {
+        // Rule 2: Referrer Present - Process referrer
+        handleReferrer(document.referrer);
+    } else {
+        // Rule 3: Direct Traffic - Handle direct traffic
+        handleDirectTraffic();
     }
 }
 
-// Execute the function to parse UTM parameters
-parseUTMParams();
+/**
+ * Handles referrer-based UTM cookies.
+ * @param {string} referrerURL - The referrer URL.
+ */
+function handleReferrer(referrerURL) {
+    try {
+        var referrer = new URL(referrerURL).hostname.toLowerCase();
+
+        // Check if referrer contains any substring to ignore
+        for (var i = 0; i < referrersToIgnore.length; i++) {
+            if (referrer.indexOf(referrersToIgnore[i]) !== -1) {
+                return;
+            }
+        }
+
+        var parts = referrer.split(".");
+        var domain = "not-set";
+        if (parts.length === 2) {
+            domain = parts[0];
+        } else if (parts.length === 3) {
+            domain = parts[1];
+        }
+
+        if (domain !== "not-set") {
+            var medium = (organicHostnames.indexOf(domain) !== -1) ? "organic" : "referral";
+            var existingMedium = getCookie("utm_medium");
+            if (existingMedium === "direct" || existingMedium === "none" || !existingMedium) {
+                setCookie("utm_source", domain, 30);
+                setCookie("utm_medium", medium, 30);
+            }
+        }
+    } catch (e) {
+        console.error("Invalid referrer URL:", e);
+    }
+}
+
+/**
+ * Handles direct traffic by setting default UTM cookies.
+ */
+function handleDirectTraffic() {
+    var existingMedium = getCookie("utm_medium");
+    if (!existingMedium) {
+        setCookie("utm_source", "direct", 30);
+        setCookie("utm_medium", "none", 30);
+    }
+}
+
+// Execute the UTM parsing function on page load
+parseAndStoreUTMParameters();
