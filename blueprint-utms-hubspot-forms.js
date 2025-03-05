@@ -1,17 +1,18 @@
-
 (function() {
+    console.log("UTM and HubSpot Prefill Script Loaded"); // Immediate log
+
     // =======================
     // Configuration Variables
     // =======================
     var CONFIG = {
-        domain: ".domain.com",                // Domain for cookie setting
-        referrerToIgnore: "domain",           // Referrers to ignore (self-referrals)
-        utmCookieName: "utm",                 // Name of the UTM cookie
-        utmCookieExpiryDays: 30,              // UTM cookie expiration in days
-        portalID: '1234567',                   // HubSpot Portal ID
-        formID: 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee', // HubSpot Form ID
-        calendarFormEndpoint: 'https://api.hsforms.com/submissions/v3/integration/submit/', // HubSpot Calendar API endpoint
-        logEnabled: false                      // Toggle for console logging
+        domain: ".domain.com",                  // Domain for cookie setting
+        referrerToIgnore: "domain",            // Referrer substring to ignore
+        utmCookieName: "utm",                   // Name of the UTM cookie
+        utmCookieExpiryDays: 30,                // UTM cookie expiration in days
+        portalID: '123456789',                   // HubSpot Portal ID
+        formID: '123456789',                    // HubSpot Form ID
+        calendarFormEndpoint: 'https://api.hsforms.com/submissions/v3/integration/submit/',
+        logEnabled: true                        // Toggle for console logging
     };
 
     // ==================
@@ -20,7 +21,6 @@
 
     /**
      * Logs messages to the console if logging is enabled.
-     * @param {...*} args - The messages or data to log.
      */
     function log() {
         if (CONFIG.logEnabled && window.console && console.log) {
@@ -30,9 +30,6 @@
 
     /**
      * Sets a cookie with the specified name, value, and expiration days.
-     * @param {string} name - The name of the cookie.
-     * @param {string} value - The value of the cookie.
-     * @param {number} days - The number of days until the cookie expires.
      */
     function setCookie(name, value, days) {
         var expires = "";
@@ -41,15 +38,14 @@
             date.setTime(date.getTime() + (days * 24 * 60 * 60 * 1000));
             expires = "; expires=" + date.toUTCString();
         }
-        var cookieString = name + "=" + (encodeURIComponent(value) || "") + expires + "; path=/; domain=" + CONFIG.domain + "; SameSite=Lax; Secure";
+        var cookieString = name + "=" + encodeURIComponent(value || "") + expires +
+                           "; path=/; domain=" + CONFIG.domain + "; SameSite=Lax; Secure";
         document.cookie = cookieString;
         log("Cookie set:", cookieString);
     }
 
     /**
      * Retrieves the value of a specified cookie.
-     * @param {string} name - The name of the cookie to retrieve.
-     * @returns {string|null} - The value of the cookie or null if not found.
      */
     function getCookie(name) {
         var nameEQ = name + "=";
@@ -67,12 +63,12 @@
                 }
             }
         }
+        log("Cookie not found:", name);
         return null;
     }
 
     /**
      * Deletes a specified cookie by setting its expiration date in the past.
-     * @param {string} name - The name of the cookie to delete.
      */
     function deleteCookie(name) {
         document.cookie = name + "=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/; domain=" + CONFIG.domain + "; SameSite=Lax; Secure";
@@ -81,11 +77,11 @@
 
     /**
      * Checks if a specific cookie exists.
-     * @param {string} name - The name of the cookie to check.
-     * @returns {boolean} - True if the cookie exists, false otherwise.
      */
     function checkCookie(name) {
-        return getCookie(name) !== null;
+        var exists = getCookie(name) !== null;
+        log("Check cookie existence -", name, ":", exists);
+        return exists;
     }
 
     // ========================
@@ -94,16 +90,13 @@
 
     /**
      * Sets the UTM cookie with the provided UTM parameters.
-     * @param {Object} utmParams - An object containing UTM parameters.
      */
     function setUTMCookie(utmParams) {
-        var utmValue = JSON.stringify(utmParams);
-        setCookie(CONFIG.utmCookieName, utmValue, CONFIG.utmCookieExpiryDays);
+        setCookie(CONFIG.utmCookieName, JSON.stringify(utmParams), CONFIG.utmCookieExpiryDays);
     }
 
     /**
      * Retrieves and parses the UTM cookie.
-     * @returns {Object|null} - The parsed UTM parameters or null if not found.
      */
     function getUTMCookie() {
         var utmCookie = getCookie(CONFIG.utmCookieName);
@@ -117,6 +110,7 @@
                 return null;
             }
         }
+        log("UTM cookie not found.");
         return null;
     }
 
@@ -131,6 +125,7 @@
      * Parses UTM parameters from the URL or referrer and sets the UTM cookie accordingly.
      */
     function parseUTMParams() {
+        log("Parsing UTM parameters...");
         var currentURL = new URL(window.location.href);
         var params = currentURL.searchParams;
 
@@ -138,46 +133,44 @@
         var utmParamKeys = ["utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content", "gclid", "fbclid"];
 
         // Check if any UTM parameter is present in the URL
-        var isUTMInURL = false;
-        for (var i = 0; i < utmParamKeys.length; i++) {
-            if (params.has(utmParamKeys[i])) {
-                isUTMInURL = true;
-                break;
-            }
-        }
+        var isUTMInURL = utmParamKeys.some(function(key) {
+            return params.has(key);
+        });
 
         if (isUTMInURL) {
             var utmParams = {
-                utm_source: params.get("utm_source") ? params.get("utm_source").toLowerCase() : "",
-                utm_medium: params.get("utm_medium") ? params.get("utm_medium").toLowerCase() : "",
-                utm_campaign: params.get("utm_campaign") ? params.get("utm_campaign").toLowerCase() : "",
-                utm_term: params.get("utm_term") ? params.get("utm_term").toLowerCase() : "",
-                utm_content: params.get("utm_content") ? params.get("utm_content").toLowerCase() : "",
-                utm_gclid: params.get("gclid") ? params.get("gclid") : "",
-                utm_fbclid: params.get("fbclid") ? params.get("fbclid") : ""
+                utm_source: (params.get("utm_source") || "").toLowerCase(),
+                utm_medium: (params.get("utm_medium") || "").toLowerCase(),
+                utm_campaign: (params.get("utm_campaign") || "").toLowerCase(),
+                utm_term: (params.get("utm_term") || "").toLowerCase(),
+                utm_content: (params.get("utm_content") || "").toLowerCase(),
+                utm_gclid: params.get("gclid") || "",
+                utm_fbclid: params.get("fbclid") || ""
             };
             log("UTM parameters found in URL:", utmParams);
             setUTMCookie(utmParams);
         } else if (document.referrer) {
+            log("No UTM parameters in URL. Checking referrer...");
             var referrer;
             try {
                 referrer = new URL(document.referrer).hostname;
+                log("Referrer hostname:", referrer);
             } catch (e) {
                 console.error("Error parsing referrer URL:", e);
                 return;
             }
 
-            if (referrer.toLowerCase().indexOf(CONFIG.referrerToIgnore.toLowerCase()) !== -1) {
+            // If the referrer includes the domain we ignore, skip it
+            if (referrer.toLowerCase().includes(CONFIG.referrerToIgnore.toLowerCase())) {
                 log("Referrer is ignored:", referrer);
                 return;
             }
 
             var hostnameParts = referrer.split(".");
             var referrerDomain;
-
-            if (hostnameParts.length === 2) { // e.g., example.com
+            if (hostnameParts.length === 2) {
                 referrerDomain = hostnameParts[0];
-            } else if (hostnameParts.length === 3) { // e.g., sub.example.com
+            } else if (hostnameParts.length === 3) {
                 referrerDomain = hostnameParts[1];
             } else {
                 referrerDomain = "not-set";
@@ -190,12 +183,17 @@
                 };
                 var existingUTM = getUTMCookie();
                 if (existingUTM && existingUTM.utm_medium === "helper_ref") {
+                    log("Existing UTM medium is 'helper_ref'. Overwriting with new referrer UTM parameters.");
                     setUTMCookie(referrerUTMParams);
                 } else if (!existingUTM) {
+                    log("No existing UTM cookie. Setting referrer-based UTM parameters:", referrerUTMParams);
                     setUTMCookie(referrerUTMParams);
+                } else {
+                    log("Existing UTM cookie present and medium is not 'helper_ref'. Skipping referrer-based UTM parameters.");
                 }
-                log("Referrer-based UTM parameters set:", referrerUTMParams);
             }
+        } else {
+            log("No UTM parameters in URL and no referrer available.");
         }
     }
 
@@ -204,10 +202,11 @@
     // ===============================
 
     /**
-     * Constructor function for handling HubSpot forms telemetry.
+     * Constructor for handling HubSpot forms telemetry.
      */
     function hsFormsTelemetry() {
         this.init = function() {
+            log("Initializing HubSpot Forms Telemetry...");
             this.watchHubspotForms();
         };
 
@@ -219,13 +218,16 @@
             window.addEventListener('message', function(event) {
                 if (event.data.type === 'hsFormCallback') {
                     if (event.data.eventName === 'onFormReady') {
+                        log("HubSpot Form Ready:", event.data.id);
                         scope.processUTMCookies();
                     }
                     if (event.data.eventName === 'onFormSubmit') {
+                        log("HubSpot Form Submit:", event.data.id);
                         scope.handleFormSubmit(event.data.id);
                     }
                 }
             });
+            log("HubSpot Forms Telemetry initialized.");
         };
 
         /**
@@ -233,9 +235,9 @@
          */
         this.processUTMCookies = function() {
             var utmParams = getUTMCookie();
-
             if (utmParams) {
                 try {
+                    log("Populating HubSpot form fields with UTM parameters.");
                     this.populateHSField("hs_utm_source", utmParams.utm_source);
                     this.populateHSField("hs_utm_medium", utmParams.utm_medium);
                     this.populateHSField("hs_utm_campaign", utmParams.utm_campaign);
@@ -246,23 +248,26 @@
                 } catch (e) {
                     console.error("Could not parse UTM session:", e);
                 }
+            } else {
+                log("No UTM parameters found in cookie. Skipping HubSpot form field population.");
             }
         };
 
         /**
          * Populates hidden fields in HubSpot forms with UTM parameters.
-         * @param {string} fieldClass - The class name of the HubSpot form field.
-         * @param {string} value - The value to set for the field.
          */
         this.populateHSField = function(fieldClass, value) {
             try {
                 var fields = document.getElementsByClassName(fieldClass);
+                log("Found", fields.length, "elements with class", fieldClass);
                 for (var i = 0; i < fields.length; i++) {
-                    var input = fields[i].getElementsByTagName("input")[0];
+                    var input = fields[i].querySelector("input");
                     if (input) {
                         input.value = value || "not-set";
                         input.dispatchEvent(new Event("change"));
-                        log("Populated", fieldClass, "with value:", value || "not-set");
+                        log("Populated HubSpot field:", fieldClass, "with value:", value || "not-set");
+                    } else {
+                        log("No input found within element with class:", fieldClass);
                     }
                 }
             } catch (e) {
@@ -271,8 +276,7 @@
         };
 
         /**
-         * Handles form submission events by clearing the UTM cookie.
-         * @param {string} formId - The ID of the submitted form.
+         * Clears the UTM cookie on form submission.
          */
         this.handleFormSubmit = function(formId) {
             log("Form submitted:", formId);
@@ -292,30 +296,44 @@
     function handleCalendarSubmission() {
         window.addEventListener('message', function(event) {
             if (event.data.meetingBookSucceeded) {
+                log("Calendar booking succeeded.");
                 var userEmail;
                 try {
                     userEmail = event.data.meetingsPayload.bookingResponse.postResponse.contact.email;
+                    log("Retrieved user email from calendar submission:", userEmail);
                 } catch (e) {
                     console.error("Error retrieving user email from calendar submission:", e);
                     return;
                 }
-
-                formv3(userEmail);
-                clearUTMCookie();
+                // Push the custom event to the dataLayer
+                if (window.dataLayer && Array.isArray(window.dataLayer)) {
+                    window.dataLayer.push({ 'event': 'hubspotCalendarSubmit' });
+                    log("Pushed 'hubspotCalendarSubmit' event to dataLayer.");
+                } else {
+                    console.warn("dataLayer is not defined. Initializing and pushing the event.");
+                    window.dataLayer = window.dataLayer || [];
+                    window.dataLayer.push({ 'event': 'hubspotCalendarSubmit' });
+                }
+                // formv3(userEmail);
+                //clearUTMCookie();
+              console.log("activate function to parse utms from calendar submits");
             }
         });
     }
 
     /**
-     * Sends UTM data along with the user's email to HubSpot via API.
-     * @param {string} email - The user's email address.
+     * Submits UTM data along with the user's email to HubSpot via API.
      */
     function formv3(email) {
+        log("Preparing to submit calendar form with email:", email);
         var utmData = {};
         try {
-            var utmCookie = getCookie(CONFIG.utmCookieName);
+            var utmCookie = getUTMCookie();
             if (utmCookie) {
                 utmData = JSON.parse(utmCookie);
+                log("UTM data parsed from cookie:", utmData);
+            } else {
+                log("No UTM cookie found.");
             }
         } catch (e) {
             console.error("Failed to parse UTM cookie:", e);
@@ -329,14 +347,13 @@
         var utmGclid = utmData['utm_gclid'] || '';
         var utmFbclid = utmData['utm_fbclid'] || '';
 
-        // Get current time as a number (milliseconds since epoch)
         var currentTime = Date.now();
+        log("Current time (ms since epoch):", currentTime);
 
-        // Get the hubspotutk cookie value
         var hubspotutk = getCookie('hubspotutk');
 
         var data = {
-            "submittedAt": currentTime.toString(), // Ensure this is a string as per sample JSON
+            "submittedAt": currentTime,
             "fields": [
                 {
                     "name": "email",
@@ -348,15 +365,13 @@
             }
         };
 
-        // Conditionally add 'hutk' if 'hubspotutk' exists and is not empty
         if (hubspotutk && hubspotutk.trim() !== "") {
             data.context.hutk = hubspotutk;
-            log("Included 'hutk' in payload:", hubspotutk);
+            log("Added 'hutk' to payload:", hubspotutk);
         } else {
             console.warn("hubspotutk cookie not found or empty. 'hutk' will be omitted from the payload.");
         }
 
-        // Add UTM fields
         addUTMField(data.fields, "utm_medium", utmMedium);
         addUTMField(data.fields, "utm_source", utmSource);
         addUTMField(data.fields, "utm_campaign", utmCampaign);
@@ -367,6 +382,7 @@
 
         var url = CONFIG.calendarFormEndpoint + CONFIG.portalID + '/' + CONFIG.formID;
         var finalData = JSON.stringify(data);
+        log("Final payload to be sent to HubSpot:", finalData);
 
         fetch(url, {
             method: 'POST',
@@ -377,6 +393,7 @@
         })
         .then(function(response) {
             if (response.ok) {
+                log("API call successful. Status:", response.status);
                 return response.json();
             } else {
                 return response.json().then(function(errorData) {
@@ -394,18 +411,158 @@
 
     /**
      * Adds a UTM field to the fields array if the value is present.
-     * @param {Array} fields - The array of fields to which the UTM field will be added.
-     * @param {string} fieldName - The name of the UTM field.
-     * @param {string} fieldValue - The value of the UTM field.
      */
     function addUTMField(fields, fieldName, fieldValue) {
         if (fieldValue) {
             fields.push({
-                "name": fieldName, // Removed "objectTypeId" as per HubSpot's API requirements
+                "name": fieldName,
                 "value": fieldValue
             });
-            log("Added UTM field:", fieldName, "=", fieldValue);
+            log("Added UTM field to payload:", fieldName, "=", fieldValue);
+        } else {
+            log("UTM field '" + fieldName + "' is empty. Not adding to payload.");
         }
+    }
+
+
+    // ====================
+    // UTM Prefill for Webflow Forms
+    // ====================
+
+    /**
+     * Prefills Webflow form hidden fields with UTM parameters (and hubspotutk) on initial load and subsequent navigations.
+     */
+    function prefillWebflowForms() {
+        log("Starting prefillWebflowForms...");
+        var utmParams = getUTMCookie();
+        var hubspotutkValue = getCookie('hubspotutk');
+
+        if (!utmParams && !hubspotutkValue) {
+            log("No UTM or hubspotutk cookie found. Skipping form prefill.");
+            return;
+        }
+
+        // Prepare the fields we want to prefill
+        var utmFields = {
+            utm_source: utmParams ? (utmParams.utm_source || "") : "",
+            utm_medium: utmParams ? (utmParams.utm_medium || "") : "",
+            utm_campaign: utmParams ? (utmParams.utm_campaign || "") : "",
+            utm_term: utmParams ? (utmParams.utm_term || "") : "",
+            utm_content: utmParams ? (utmParams.utm_content || "") : "",
+            utm_gclid: utmParams ? (utmParams.utm_gclid || "") : "",
+            utm_fbclid: utmParams ? (utmParams.utm_fbclid || "") : ""
+        };
+
+        var prefillExecuted = false;  // Prevent multiple executions per navigation
+
+        function prefillForm(form) {
+            if (prefillExecuted) {
+                log("Prefill already executed for this navigation. Skipping.");
+                return;
+            }
+            prefillExecuted = true;
+            log("Attempting to prefill form:", form);
+
+            // Fill existing UTM fields only
+            for (var key in utmFields) {
+                if (utmFields.hasOwnProperty(key)) {
+                    var field = form.querySelector('input[name="' + key + '"]');
+                    if (field) {
+                        field.value = utmFields[key];
+                        log("Prefilled form field:", key, "with value:", utmFields[key]);
+                    } else {
+                        log("Field '" + key + "' not found in form. Skipping.");
+                        // Do NOT create the field if it doesn't exist
+                    }
+                }
+            }
+
+            // hubspotutk field if available
+            if (hubspotutkValue) {
+                var hubspotutkField = form.querySelector('input[name="hubspotutk"]');
+                if (hubspotutkField) {
+                    hubspotutkField.value = hubspotutkValue;
+                    log("Prefilled form field: hubspotutk with value:", hubspotutkValue);
+                } else {
+                    log("Field 'hubspotutk' not found in form. Skipping.");
+                    // Do NOT create the field if it doesn't exist
+                }
+            }
+        }
+
+        // Prefill all existing forms right now
+        function executePrefill() {
+            var existingForms = document.querySelectorAll('form');
+            log("Found", existingForms.length, "existing forms on the page.");
+            existingForms.forEach(function(form) {
+                prefillForm(form);
+            });
+        }
+
+        // Run once on page load
+        executePrefill();
+
+        // Observe DOM for any new forms (e.g., dynamically added)
+        var observer = new MutationObserver(function(mutations) {
+            mutations.forEach(function(mutation) {
+                mutation.addedNodes.forEach(function(node) {
+                    if (node.nodeType === 1) { // Element node
+                        if (node.tagName && node.tagName.toLowerCase() === 'form') {
+                            log("New form detected via MutationObserver:", node);
+                            prefillForm(node);
+                        } else {
+                            var nestedForms = node.querySelectorAll ? node.querySelectorAll('form') : [];
+                            if (nestedForms.length > 0) {
+                                log("New nested forms detected via MutationObserver:", nestedForms.length);
+                                nestedForms.forEach(function(form) {
+                                    prefillForm(form);
+                                });
+                            }
+                        }
+                    }
+                });
+            });
+        });
+        observer.observe(document.body, { childList: true, subtree: true });
+        log("MutationObserver set up to watch for new forms.");
+
+        // Force a re-run if the user navigates via client-side routing
+        function onHistoryChange() {
+            log("History changed. Executing prefill logic again.");
+            prefillExecuted = false; // Allow prefill again for the new page
+            parseUTMParams();        // Re-parse in case the URL changed
+            executePrefill();        // Prefill existing forms
+        }
+
+        // Hook into pushState and replaceState to detect URL changes
+        (function(history){
+            var pushState = history.pushState;
+            history.pushState = function(state) {
+                var ret = pushState.apply(history, arguments);
+                onHistoryChange();
+                return ret;
+            };
+            var replaceState = history.replaceState;
+            history.replaceState = function(state) {
+                var ret = replaceState.apply(history, arguments);
+                onHistoryChange();
+                return ret;
+            };
+        })(window.history);
+
+        // Listen for popstate event
+        window.addEventListener('popstate', function() {
+            log("popstate event detected.");
+            onHistoryChange();
+        });
+
+        // Optionally stop observing after X time for performance
+        setTimeout(function() {
+            observer.disconnect();
+            log("MutationObserver disconnected after 10 minutes.");
+        }, 10 * 60 * 1000);
+
+        log("prefillWebflowForms setup completed.");
     }
 
     // ====================
@@ -413,17 +570,29 @@
     // ====================
 
     /**
-     * The main function initializes parsing UTM parameters, sets up HubSpot forms telemetry, and handles calendar submissions.
+     * Main function: parse UTM, set up HubSpot telemetry, handle calendar submissions,
+     * and prefill Webflow forms with UTM/hubspotutk.
      */
     function main() {
+        log("Main function started.");
         parseUTMParams();
         new hsFormsTelemetry();
         handleCalendarSubmission();
+        prefillWebflowForms();
+        log("Main function completed.");
     }
 
-    // Execute the main function after the DOM is fully loaded
-    document.addEventListener('DOMContentLoaded', function() {
+    // Fire `main()` after DOM load for the first page load, or immediately if already loaded
+    if (document.readyState === "complete" || document.readyState === "interactive") {
+        // Document is already ready, run main immediately
+        log("Document already loaded. Running main().");
         main();
-    });
+    } else {
+        // Document not ready yet, wait for DOMContentLoaded
+        document.addEventListener('DOMContentLoaded', function() {
+            log("DOMContentLoaded event fired.");
+            main();
+        });
+    }
 
 })();
