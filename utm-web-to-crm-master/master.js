@@ -1,6 +1,6 @@
 /**
  * Unified UTM Parameter Handler and Form Integration
- * Version 1.0.2
+ * Version 1.0.2 
  * 
  * This script handles UTM parameter tracking and form integrations across multiple platforms.
  * It can be loaded via Google Tag Manager and supports both traditional page loads and PWAs.
@@ -22,18 +22,18 @@
     var CONFIG = {
         // Core Settings
         domain: '.example.com',                // Domain for cookie setting
-        referrersToIgnore: ['example'],        // List of referrer substrings to ignore
-        utmCookieName: 'utm_params',           // Name of the UTM cookie
-        utmCookieExpiryDays: 90,              // UTM cookie expiration in days
-        logEnabled: true,                      // Toggle for console logging
-        handleHistoryChange: true,             // Enable handling of history changes for SPAs
+        referrersToIgnore: ['example'],          // List of referrer substrings to ignore
+        utmCookieName: 'utm_params',             // Name of the UTM cookie
+        utmCookieExpiryDays: 90,                 // UTM cookie expiration in days
+        logEnabled: true,                        // Toggle for console logging
+        handleHistoryChange: true,               // Enable handling of history changes for SPAs
 
         // Form Integration Toggles
-        enableHubspotForms: false,             // Enable HubSpot forms integration
-        enableHubspotCalendar: false,          // Enable HubSpot calendar integration
-        enablePardotForms: false,              // Enable Pardot forms integration
-        enableWebflowForms: false,             // Enable Webflow forms integration
-        enableWPForms: false,                  // Enable WPForms integration
+        enableHubspotForms: false,               // Enable HubSpot forms integration
+        enableHubspotCalendar: false,            // Enable HubSpot calendar integration
+        enablePardotForms: false,                // Enable Pardot forms integration
+        enableWebflowForms: false,               // Enable Webflow forms integration
+        enableWPForms: false,                    // Enable WPForms integration
 
         // List of known organic referrer hostnames
         organicHostnames: [
@@ -134,6 +134,9 @@
         log('Cookie deleted:', name);
     }
 
+    /**
+     * Retrieve a parameter value from the URL query string
+     */
     function getURLParameter(name) {
         name = name.replace(/[\[]/, '\\[').replace(/[\]]/, '\\]');
         var regex = new RegExp('[\\?&]' + name + '=([^&#]*)');
@@ -309,7 +312,7 @@
                 var fieldName = 'hs_' + param;
                 var value = utmParams[param];
                 if (value) {
-                    this.setHubSpotFieldValue(fieldName, value);
+                    HubSpotHandler.setHubSpotFieldValue(fieldName, value);
                 }
             });
         },
@@ -540,4 +543,4 @@
 
     // Export UTM parameter getter for external use
     window.getUTMParameters = UTMHandler.getUTMCookie.bind(UTMHandler);
-})(); 
+})();
